@@ -1,0 +1,179 @@
+from pygame import *https://github.com/issues
+import os
+from random import randint 
+
+# add root dir
+script_dir = os.path.dirname(__file__)
+print("ini direktori awal == ",script_dir)
+
+#background music
+mixer.init()
+mixer.music.load('space.ogg')
+mixer.music.play()
+fire_sound = mixer.Sound('fire.ogg')
+
+#fonts and labels
+font.init()
+font2 = font.Font(None, 46)
+win = font2.render('YOU WIN!', True, (69, 69, 69))
+lose = font2.render('YOU LOSE!', True, (255, 0, 0))
+
+# we need these pictures:
+img_back = "galaxyy.jpg" # game background
+img_hero = "rockett.png" # character
+img_alien = "ufoo.png" # character
+img_bullet = "bullett.png" # bullet
+
+# tambahkan os
+#img_back = os.path.join(script_dir, img_back)
+#img_hero = os.path.join(script_dir, img_hero)
+#img_alien = os.path.join(script_dir, img_alien)
+#img_bullet = os.path.join(script_dir, img_bullet)
+
+# variabel untuk skor dan lost
+score = 0 # ships hit
+goal = 10 # how many ships need to be hit to win
+missed = 0 # ships missed
+max_lost = 10 # lost if this many missed
+
+# parent class for other sprites
+class GameSprite(sprite.Sprite):
+  # class constructor
+    def __init__(self, player_image, player_x, player_y, size_x, size_y, player_speed):
+        # We call the class constructor (Sprite):
+        sprite.Sprite.__init__(self)
+
+        # each sprite must store an image property
+        player_image = os.path.join(script_dir, player_image)
+
+        self.image = transform.scale(image.load(player_image), (size_x, size_y))
+        self.speed = player_speed
+
+        # each sprite must store the rect property it is inscribed in
+        self.rect = self.image.get_rect()
+        self.rect.x = player_x
+        self.rect.y = player_y
+
+  # method that draws the character in the window
+    def reset(self):
+        window.blit(self.image, (self.rect.x, self.rect.y))
+
+# main player class
+class Player(GameSprite):
+    # method for controlling the sprite with keyboard arrows
+    def update(self):
+        keys = key.get_pressed()
+        if keys[K_LEFT] and self.rect.x > 5:
+            self.rect.x -= self.speed
+        if keys[K_RIGHT] and self.rect.x < win_width - 80:
+            self.rect.x += self.speed
+  # the "fire" method (use the player's place to create a bullet there)
+    def fire(self):
+        bullet = Bullet(img_bullet, ship.rect.x + 35, ship.rect.y, 20, 30, 20)
+        bullets.add(bullet)
+
+class Monster(GameSprite):
+    # method for controlling the sprite with keyboard arrows
+    def update(self):
+        global missed
+        # jika posisi y masih dibawah 500 maka arahnya "down"
+        if self.rect.y <= 500:
+            self.side = "down"
+        # jika tidak, maka arahnya menjadi "restart" 
+        else:
+            self.side = "restart"
+
+        # jika arahnya down, maka koordinat akan ditambah terus menerus
+        if self.side == "down":
+            self.rect.y += self.speed
+        else:
+            self.rect.x = randint(100,600)
+            self.rect.y = 0
+            missed += 1
+
+class Bullet(GameSprite):
+    # method for bullets
+    def update(self):
+        self.rect.y -= self.speed
+        if self.rect.y < 0 or sprite.collide_rect(self, alien):
+            self.kill()
+# Create the window
+win_width = 700
+win_height = 500
+
+
+
+display.set_caption("Shooter")
+window = display.set_mode((win_width, win_height))
+background = transform.scale(image.load(img_back), (win_width, win_height))
+
+# create sprites
+ship = Player(img_hero, 100, win_height - 100, 80, 110, 20)  # doubled speed
+
+# create alien
+aliens = sprite.Group()
+for i in range(1,6):
+    speed_random = randint(4, 8)  # doubled speed
+    print("alien ke ",i, "kecepatan = ",speed_random )
+    alien = Monster(img_alien, randint(100,600), 0, 110, 110, speed_random)
+    aliens.add(alien)
+
+# create bullets
+bullets = sprite.Group()
+
+# the "game over" variable: as soon as it is True, the sprites stop working in the main loop
+finish = False
+# Main game loop:
+run = True # the flag is cleared with the close window button
+while run:
+    # the press the Close button event
+    for e in event.get():
+        if e.type == QUIT:
+            run = False
+        elif e.type == KEYDOWN:
+            if e.key == K_SPACE:
+                fire_sound.play()
+                ship.fire()
+
+    if not finish:
+        # refresh background
+        window.blit(background,(0,0))
+
+        # producing sprite movements
+        ship.update()
+        aliens.update()
+        bullets.update()
+
+        text = font2.render("Score: " + str(score), 1, (255, 255, 255))
+        window.blit(text, (10, 20))
+
+        text = font2.render("Missed: " + str(missed), 1, (255, 255, 255))
+        window.blit(text, (10, 50))
+
+        # updating them at a new location on each iteration of the loop
+        ship.reset()
+        aliens.draw(window)
+        bullets.draw(window)
+        
+        # bullet-monster collision check (both monster and bullet disappear upon touching)
+        collides = sprite.groupcollide(aliens, bullets, True, True)
+        for c in collides:
+            # this loop will be repeated as many times as aliens are killed
+            score = score + 1
+            speed_random = randint(8, 16)  # doubled speed
+            monster = Monster(img_alien, randint(100,600), 0, 110, 110, speed_random)
+            aliens.add(monster)
+
+        # possible loss: missed too many or the character collided with the alien
+        if sprite.spritecollide(ship, aliens, False) or missed >= max_lost:
+            finish = True # lost, set the background and no more sprite control.
+            window.blit(lose, (200, 200))
+
+        # win check: how many points did you score?
+        if score >= goal:
+            finish = True
+            window.blit(win, (200, 200))
+        display.update()
+    
+    # the loop runs every 0.025 seconds (instead of 0.05)
+    time.delay(50)
